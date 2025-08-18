@@ -37,6 +37,7 @@ steps:
   displayName: 'Run Bruno Tests and Generate JUnit Report'
 
 - script: |
+    sudo npm audit fix --force
     sudo npm install xml2js node-fetch
     node updateTestPlan.js
   displayName: 'Update Azure DevOps Test Plan with Bruno Results'
