@@ -49,7 +49,7 @@ async function createTestRun() {
     name: `Bruno Test Run - ${new Date().toISOString()}`,
     plan: { id: parseInt(ADO_TEST_PLAN_ID, 10) },
     // Optional: include suite
-    ADO_TEST_SUITE_ID ? { suite: { id: parseInt(ADO_TEST_SUITE_ID, 10) } } : {},
+    ...(ADO_TEST_SUITE_ID ? { suite: { id: parseInt(ADO_TEST_SUITE_ID, 10) } } : {})
     automated: true,
   };
 
