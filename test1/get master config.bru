@@ -9,8 +9,10 @@ get {
   body: none
   auth: inherit
 }
-assert {
-  res.status: eq 200
+tests {
+   test("get master config", function() {
+      expect(res.status).to.equal(200);
+    });
 }
 settings {
   encodeUrl: true
