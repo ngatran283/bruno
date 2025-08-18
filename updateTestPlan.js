@@ -110,7 +110,7 @@ results.map((suite) => {
   console.log('-----------------------------------------');
   console.log(`Test Suite Name : ${suite.name}`);
   console.log(`Tests           : ${suite.tests}`);
-  console.log('-----------------------------------------');}
+  console.log('-----------------------------------------')});
     console.log('Creating test run...');
     const run = await createTestRun();
     console.log(`Test run created: ID ${run.id}`);
