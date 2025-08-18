@@ -32,37 +32,14 @@ async function parseJUnitReport(filePath) {
   const result = await parseStringPromise(xml);
   const testsuites = result.testsuites.testsuite || [];
 
- // const payload =  testsuites.map((suite) => ({
-   // name: suite.$.name,
-    //errors: parseInt(suite.$.errors, 10),
-    //failures: parseInt(suite.$.failures, 10),
-    //skipped: parseInt(suite.$.skipped, 10),
-    //tests: parseInt(suite.$.tests, 10),
-  //  time: parseFloat(suite.$.time),
-//  }));
-const payload = results.map((suite) => {
-  const outcome =
-    suite.failures > 0 ? 'Failed' :
-    suite.skipped > 0 ? 'NotExecuted' : 'Passed';
-
-  // Detailed logging
-  console.log('-----------------------------------------');
-  console.log(`Test Suite Name : ${suite.name}`);
-  console.log(`Tests           : ${suite.tests}`);
-  console.log(`Failures        : ${suite.failures}`);
-  console.log(`Errors          : ${suite.errors}`);
-  console.log(`Skipped         : ${suite.skipped}`);
-  console.log(`Time (s)        : ${suite.time}`);
-  console.log(`Mapped Outcome  : ${outcome}`);
-  console.log('-----------------------------------------');
-
-  return {
-    testCaseTitle: suite.name,
-    outcome: outcome,
-    automatedTestName: suite.name,
-    automatedTestType: 'Unit',
-  };
-});
+ return  testsuites.map((suite) => ({
+    name: suite.$.name,
+    errors: parseInt(suite.$.errors, 10),
+    failures: parseInt(suite.$.failures, 10),
+    skipped: parseInt(suite.$.skipped, 10),
+    tests: parseInt(suite.$.tests, 10),
+    time: parseFloat(suite.$.time),
+  }));
 }
 
 // Create a new test run
@@ -128,7 +105,12 @@ async function addTestResults(runId, results) {
   try {
     console.log('Parsing JUnit report...');
     const results = await parseJUnitReport(TEST_REPORT_FILE);
-
+results.map((suite) => {
+  // Detailed logging
+  console.log('-----------------------------------------');
+  console.log(`Test Suite Name : ${suite.name}`);
+  console.log(`Tests           : ${suite.tests}`);
+  console.log('-----------------------------------------');}
     console.log('Creating test run...');
     const run = await createTestRun();
     console.log(`Test run created: ID ${run.id}`);
