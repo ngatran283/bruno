@@ -24,7 +24,7 @@ steps:
   displayName: 'Install Bruno CLI'
 
 - script: |
-    bru run --output "$testReportFile" --format junit
+    bru run --output "junit-report.xml" --format junit
   displayName: 'Run Bruno Tests and Generate JUnit Report'
   
 - task: PublishTestResults@2
