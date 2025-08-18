@@ -10,6 +10,11 @@ pool:
   name: 'Default'
 
 variables:
+  ADO_ORG: 'my-org'
+  ADO_PROJECT: 'my-project'
+  ADO_PAT: $(PersonalAccessToken)
+  ADO_TEST_PLAN_ID: '4'
+  ADO_TEST_SUITE_ID: '5'
   brunoCollectionPath: 'test1'
   brunoEnvironment: 'local'
   testReportFile: 'junit-report.xml'
