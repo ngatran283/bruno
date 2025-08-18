@@ -20,7 +20,7 @@ variables:
   ADO_TEST_SUITE_ID: '4'         # optional, target specific suite
 
   # Bruno configuration
-  brunoCollectionPath: 'test2'
+  brunoCollectionPath: 'test1'
   brunoEnvironment: 'local'
   testReportFile: 'junit-report.xml'
 
