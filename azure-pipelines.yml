@@ -10,26 +10,28 @@ pool:
   name: 'Default'
 
 variables:
-  brunoCollectionPath: 'test1' # Update this path
+  brunoCollectionPath: 'bruno/test1' # Update this path
   testReportFile: 'junit-report.xml'
   
 steps:
 - task: NodeTool@0
   inputs:
-    versionSpec: '16.x' # Use a recent version of Node.js
+    versionSpec: '20.x'
   displayName: 'Install Node.js'
 
 - script: |
-    sudo npm install -g @usebruno/cli --unsafe-perm=true --allow-root
+    sudo npm install -g @usebruno/cli
   displayName: 'Install Bruno CLI'
 
 - script: |
-    bru run --output "junit-report.xml" --format junit
+    bru run "$brunoCollectionPath" \
+      --output "$testReportFile" \
+      --format junit
   displayName: 'Run Bruno Tests and Generate JUnit Report'
   
 - task: PublishTestResults@2
   inputs:
     testResultsFormat: 'JUnit'
-    testResultsFiles: '$testReportFile'
+    testResultsFiles: '$(testReportFile)'
     testRunTitle: 'Bruno API Tests'
   displayName: 'Publish Test Results to Azure DevOps'
