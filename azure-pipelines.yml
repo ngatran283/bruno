@@ -3,6 +3,8 @@
 # Add steps that build, run tests, deploy, and more:
 # https://aka.ms/yaml
 
+# Starter pipeline with Bruno + Azure DevOps Test Plan update
+
 trigger:
 - main
 
@@ -10,41 +12,56 @@ pool:
   name: 'Default'
 
 variables:
-  ADO_ORG: 'my-org'
-  ADO_PROJECT: 'my-project'
-  ADO_PAT: $(PersonalAccessToken)
-  ADO_TEST_PLAN_ID: '4'
-  ADO_TEST_SUITE_ID: '5'
+  # Azure DevOps configuration
+  ADO_ORG: 'ngatran283'                  # your Azure DevOps org
+  ADO_PROJECT: 'bruno'          # your Azure DevOps project
+  ADO_PAT: $(PersonalAccessToken)    # secret PAT stored in pipeline
+  ADO_TEST_PLAN_ID: '4'          # your Test Plan ID
+  ADO_TEST_SUITE_ID: '5'         # optional, target specific suite
+
+  # Bruno configuration
   brunoCollectionPath: 'test1'
   brunoEnvironment: 'local'
   testReportFile: 'junit-report.xml'
 
 steps:
+# 1️⃣ Install Node.js
 - task: NodeTool@0
   inputs:
     versionSpec: '20.x'
   displayName: 'Install Node.js'
 
+# 2️⃣ Install Bruno CLI
 - script: |
     sudo npm install -g @usebruno/cli
   displayName: 'Install Bruno CLI'
 
+# 3️⃣ Install Node dependencies for test plan update script
 - script: |
-    bru run "$(brunoCollectionPath)" \
-      --output "$(Build.ArtifactStagingDirectory)/$(testReportFile)" \
-      --format junit \
-      --env "$(brunoEnvironment)"
+    sudo npm install xml2js node-fetch
+  displayName: 'Install Node.js Dependencies'
+
+# 4️⃣ Run Bruno Tests and generate JUnit report
+- script: |
+    bru run "$(brunoCollectionPath)" --output "$(Build.ArtifactStagingDirectory)/$(testReportFile)" --format junit --env $(brunoEnvironment)
   displayName: 'Run Bruno Tests and Generate JUnit Report'
 
+# 5️⃣ Update Azure DevOps Test Plan with Bruno results
 - script: |
-    sudo npm audit fix --force
-    sudo npm install xml2js node-fetch
     node updateTestPlan.js
   displayName: 'Update Azure DevOps Test Plan with Bruno Results'
+  env:
+    ADO_ORG: $(ADO_ORG)
+    ADO_PROJECT: $(ADO_PROJECT)
+    ADO_PAT: $(ADO_PAT)
+    ADO_TEST_PLAN_ID: $(ADO_TEST_PLAN_ID)
+    ADO_TEST_SUITE_ID: $(ADO_TEST_SUITE_ID)
+    TEST_REPORT_FILE: $(Build.ArtifactStagingDirectory)/$(testReportFile)
 
+# 6️⃣ Publish JUnit test results to Azure DevOps
 - task: PublishTestResults@2
   inputs:
     testResultsFormat: 'JUnit'
-    testResultsFiles: '$(Build.ArtifactStagingDirectory)/junit-report.xml'
+    testResultsFiles: '$(Build.ArtifactStagingDirectory)/$(testReportFile)'
     testRunTitle: 'Bruno API Tests'
   displayName: 'Publish Test Results to Azure DevOps'
