@@ -22,10 +22,10 @@ steps:
 - script: |
     sudo npm install -g @usebruno/cli
   displayName: 'Install Bruno CLI'
-
+  
 - script: |
-    bru run "$brunoCollectionPath" \
-      --output "$testReportFile" \
+    bru run "$(brunoCollectionPath)" \
+      --output "$(testReportFile)" \
       --format junit
   displayName: 'Run Bruno Tests and Generate JUnit Report'
   
