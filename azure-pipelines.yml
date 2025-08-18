@@ -10,9 +10,10 @@ pool:
   name: 'Default'
 
 variables:
-  brunoCollectionPath: 'bruno/test1' # Update this path
+  brunoCollectionPath: 'test1'
+  brunoEnvironment: 'local'
   testReportFile: 'junit-report.xml'
-  
+
 steps:
 - task: NodeTool@0
   inputs:
@@ -22,14 +23,22 @@ steps:
 - script: |
     sudo npm install -g @usebruno/cli
   displayName: 'Install Bruno CLI'
-  
+
 - script: |
-    bru run "test1" --output "junit-report.xml" --format junit --env local
+    bru run "$(brunoCollectionPath)" \
+      --output "$(Build.ArtifactStagingDirectory)/$(testReportFile)" \
+      --format junit \
+      --env "$(brunoEnvironment)"
   displayName: 'Run Bruno Tests and Generate JUnit Report'
-  
+
+- script: |
+    echo "== Debug: list files in ArtifactStagingDirectory =="
+    ls -R "$(Build.ArtifactStagingDirectory)"
+  displayName: 'Debug Generated Reports'
+
 - task: PublishTestResults@2
   inputs:
     testResultsFormat: 'JUnit'
-    testResultsFiles: '$(testReportFile)'
+    testResultsFiles: '$(Build.ArtifactStagingDirectory)/$(testReportFile)'
     testRunTitle: 'Bruno API Tests'
   displayName: 'Publish Test Results to Azure DevOps'
