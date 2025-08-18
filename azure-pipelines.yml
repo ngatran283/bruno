@@ -20,7 +20,7 @@ steps:
   displayName: 'Install Node.js'
 
 - script: |
-    npm install -g @usebruno/cli
+    sudo npm install -g @usebruno/cli
   displayName: 'Install Bruno CLI'
 
 - script: |
