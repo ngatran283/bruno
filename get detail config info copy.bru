@@ -1,0 +1,15 @@
+meta {
+  name: get detail config info copy
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{host}}/config/info/12
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}
