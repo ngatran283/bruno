@@ -31,14 +31,38 @@ async function parseJUnitReport(filePath) {
   const xml = fs.readFileSync(path.resolve(filePath), 'utf-8');
   const result = await parseStringPromise(xml);
   const testsuites = result.testsuites.testsuite || [];
-  return testsuites.map((suite) => ({
-    name: suite.$.name,
-    errors: parseInt(suite.$.errors, 10),
-    failures: parseInt(suite.$.failures, 10),
-    skipped: parseInt(suite.$.skipped, 10),
-    tests: parseInt(suite.$.tests, 10),
-    time: parseFloat(suite.$.time),
-  }));
+
+ // const payload =  testsuites.map((suite) => ({
+   // name: suite.$.name,
+    //errors: parseInt(suite.$.errors, 10),
+    //failures: parseInt(suite.$.failures, 10),
+    //skipped: parseInt(suite.$.skipped, 10),
+    //tests: parseInt(suite.$.tests, 10),
+  //  time: parseFloat(suite.$.time),
+//  }));
+const payload = results.map((suite) => {
+  const outcome =
+    suite.failures > 0 ? 'Failed' :
+    suite.skipped > 0 ? 'NotExecuted' : 'Passed';
+
+  // Detailed logging
+  console.log('-----------------------------------------');
+  console.log(`Test Suite Name : ${suite.name}`);
+  console.log(`Tests           : ${suite.tests}`);
+  console.log(`Failures        : ${suite.failures}`);
+  console.log(`Errors          : ${suite.errors}`);
+  console.log(`Skipped         : ${suite.skipped}`);
+  console.log(`Time (s)        : ${suite.time}`);
+  console.log(`Mapped Outcome  : ${outcome}`);
+  console.log('-----------------------------------------');
+
+  return {
+    testCaseTitle: suite.name,
+    outcome: outcome,
+    automatedTestName: suite.name,
+    automatedTestType: 'Unit',
+  };
+});
 }
 
 // Create a new test run
