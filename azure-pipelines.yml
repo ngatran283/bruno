@@ -7,7 +7,7 @@ trigger:
 - main
 
 pool:
-  vmImage: 'Default'
+  name: 'Default'
 
 variables:
   brunoCollectionPath: 'test1' # Update this path
