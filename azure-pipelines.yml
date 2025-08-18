@@ -14,7 +14,7 @@ pool:
 variables:
   # Azure DevOps configuration
   ADO_ORG: 'ngatran283'                  # your Azure DevOps org
-  ADO_PROJECT: 'bruno'          # your Azure DevOps project
+  ADO_PROJECT: 'demo'          # your Azure DevOps project
   ADO_PAT: $(PersonalAccessToken)    # secret PAT stored in pipeline
   ADO_TEST_PLAN_ID: '4'          # your Test Plan ID
   ADO_TEST_SUITE_ID: '5'         # optional, target specific suite
