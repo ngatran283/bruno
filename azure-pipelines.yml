@@ -39,6 +39,6 @@ steps:
 - task: PublishTestResults@2
   inputs:
     testResultsFormat: 'JUnit'
-    testResultsFiles: '$(Build.ArtifactStagingDirectory)/$(testReportFile)'
+    testResultsFiles: '$(Build.ArtifactStagingDirectory)/junit-report.xml'
     testRunTitle: 'Bruno API Tests'
   displayName: 'Publish Test Results to Azure DevOps'
