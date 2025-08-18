@@ -1,94 +1,120 @@
-const fs = require('fs');
-const xml2js = require('xml2js');
-const fetch = require('node-fetch');
+#!/usr/bin/env node
 
-const jUnitFile = process.env.TEST_REPORT_FILE || 'junit-report.xml';
-const org = process.env.ADO_ORG;
-const project = process.env.ADO_PROJECT;
-const token = process.env.ADO_PAT;
-const planId = process.env.ADO_TEST_PLAN_ID;
-const suiteId = process.env.ADO_TEST_SUITE_ID; // Optional: specific suite
+import fs from 'fs';
+import path from 'path';
+import { parseStringPromise } from 'xml2js';
 
-if (!org || !project || !token || !planId) {
-  console.error('Missing required environment variables!');
+// Environment variables from pipeline
+const ADO_ORG = process.env.ADO_ORG;
+const ADO_PROJECT = process.env.ADO_PROJECT;
+const ADO_PAT = process.env.ADO_PAT;
+const ADO_TEST_PLAN_ID = process.env.ADO_TEST_PLAN_ID;
+const ADO_TEST_SUITE_ID = process.env.ADO_TEST_SUITE_ID; // optional
+const TEST_REPORT_FILE = process.env.TEST_REPORT_FILE;
+
+if (!ADO_ORG || !ADO_PROJECT || !ADO_PAT || !ADO_TEST_PLAN_ID || !TEST_REPORT_FILE) {
+  console.error('Missing required environment variables.');
   process.exit(1);
 }
 
-const parser = new xml2js.Parser();
-const xml = fs.readFileSync(jUnitFile, 'utf-8');
+// Basic auth header for Azure DevOps REST API
+const authHeader = () => {
+  const token = Buffer.from(`:${ADO_PAT}`).toString('base64');
+  return `Basic ${token}`;
+};
 
-function authHeader() {
-  return 'Basic ' + Buffer.from(':' + token).toString('base64');
+// Azure DevOps REST API base URL
+const baseUrl = `https://dev.azure.com/${ADO_ORG}/${ADO_PROJECT}/_apis/test`;
+
+// Read and parse JUnit report
+async function parseJUnitReport(filePath) {
+  const xml = fs.readFileSync(path.resolve(filePath), 'utf-8');
+  const result = await parseStringPromise(xml);
+  const testsuites = result.testsuites.testsuite || [];
+  return testsuites.map((suite) => ({
+    name: suite.$.name,
+    errors: parseInt(suite.$.errors, 10),
+    failures: parseInt(suite.$.failures, 10),
+    skipped: parseInt(suite.$.skipped, 10),
+    tests: parseInt(suite.$.tests, 10),
+    time: parseFloat(suite.$.time),
+  }));
 }
 
-async function getTestCases() {
-  let url = `https://dev.azure.com/${org}/${project}/_apis/test/plans/${planId}/suites/${suiteId}/testcases?api-version=7.1-preview.1`;
-  const response = await fetch(url, { headers: { 'Authorization': authHeader() } });
-  const data = await response.json();
-  return data.value || [];
-}
-
+// Create a new test run
 async function createTestRun() {
-  const url = `https://dev.azure.com/${org}/${project}/_apis/test/runs?api-version=7.1-preview.1`;
+  const url = `${baseUrl}/runs?api-version=7.1-preview.2`;
   const body = {
-    name: `Bruno API Test Run - ${new Date().toISOString()}`,
-    plan: { id: planId },
-    automated: true
+    name: `Bruno Test Run - ${new Date().toISOString()}`,
+    plan: { id: parseInt(ADO_TEST_PLAN_ID, 10) },
+    // Optional: include suite
+    ...(ADO_TEST_SUITE_ID ? { suite: { id: parseInt(ADO_TEST_SUITE_ID, 10) } } : {}),
+    automated: true,
   };
-  const response = await fetch(url, {
+
+  const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': authHeader() },
-    body: JSON.stringify(body)
+    headers: {
+      'Authorization': authHeader(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
   });
-  return await response.json();
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to create test run: ${res.status} ${text}`);
+  }
+
+  return res.json();
 }
 
+// Add test results to the test run
 async function addTestResults(runId, results) {
-  const url = `https://dev.azure.com/${org}/${project}/_apis/test/runs/${runId}/results?api-version=7.1-preview.1`;
-  const response = await fetch(url, {
+  const url = `${baseUrl}/runs/${runId}/results?api-version=7.1-preview.6`;
+
+  const payload = results.map((suite) => ({
+    testCaseTitle: suite.name,
+    outcome:
+      suite.failures > 0 ? 'Failed' :
+      suite.skipped > 0 ? 'NotExecuted' : 'Passed',
+    automatedTestName: suite.name,
+    automatedTestType: 'Unit',
+  }));
+
+  const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': authHeader() },
-    body: JSON.stringify(results)
+    headers: {
+      'Authorization': authHeader(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
   });
-  return await response.json();
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to add test results: ${res.status} ${text}`);
+  }
+
+  return res.json();
 }
 
-parser.parseString(xml, async (err, result) => {
-  if (err) {
-    console.error('Failed to parse JUnit XML:', err);
+// Main execution
+(async () => {
+  try {
+    console.log('Parsing JUnit report...');
+    const results = await parseJUnitReport(TEST_REPORT_FILE);
+
+    console.log('Creating test run...');
+    const run = await createTestRun();
+    console.log(`Test run created: ID ${run.id}`);
+
+    console.log('Uploading test results...');
+    await addTestResults(run.id, results);
+
+    console.log('Test results uploaded successfully!');
+  } catch (err) {
+    console.error('Error updating Azure DevOps Test Plan:', err);
     process.exit(1);
   }
-
-  const testSuites = result.testsuites.testsuite || [];
-  if (!testSuites.length) {
-    console.log('No test suites found in JUnit report.');
-    return;
-  }
-
-  const testCasesInPlan = await getTestCases();
-
-  // Map Bruno test suite names to Test Case IDs
-  const results = [];
-  testSuites.forEach(suite => {
-    const matchingTest = testCasesInPlan.find(tc => tc.testCase.name === suite.$.name);
-    if (matchingTest) {
-      const outcome = suite.$.failures === '0' ? 'Passed' : 'Failed';
-      results.push({
-        testCase: { id: matchingTest.testCase.id },
-        outcome: outcome,
-        durationInMs: parseFloat(suite.$.time || 0) * 1000
-      });
-    }
-  });
-
-  if (!results.length) {
-    console.log('No matching test cases found in Test Plan.');
-    return;
-  }
-
-  const run = await createTestRun();
-  console.log('Created Test Run:', run.id);
-
-  const addedResults = await addTestResults(run.id, results);
-  console.log('Added Test Results:', addedResults.count);
-});
+})();
