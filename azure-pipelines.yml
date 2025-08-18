@@ -28,6 +28,8 @@ steps:
 - script: |
     sudo npm install -g @usebruno/cli
   displayName: 'Install Bruno CLI'
+- script: |
+    npm install xml2js node-fetch
 
 - script: |
     bru run "$(brunoCollectionPath)" \
@@ -37,9 +39,9 @@ steps:
   displayName: 'Run Bruno Tests and Generate JUnit Report'
 
 - script: |
-    echo "== Debug: list files in ArtifactStagingDirectory =="
-    ls -R "$(Build.ArtifactStagingDirectory)"
-  displayName: 'Debug Generated Reports'
+    npm install xml2js node-fetch
+    node updateTestPlan.js
+  displayName: 'Update Azure DevOps Test Plan with Bruno Results'
 
 - task: PublishTestResults@2
   inputs:
