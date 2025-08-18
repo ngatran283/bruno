@@ -9,7 +9,9 @@ get {
   body: none
   auth: inherit
 }
-
+assert {
+  status: eq 200
+}
 settings {
   encodeUrl: true
 }
