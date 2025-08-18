@@ -20,11 +20,11 @@ steps:
   displayName: 'Install Node.js'
 
 - script: |
-    sudo npm install -g @usebruno/cli
+    sudo npm install -g @usebruno/cli --unsafe-perm=true --allow-root
   displayName: 'Install Bruno CLI'
 
 - script: |
-    bru run --output "$testReportFile" --format junit --folder "$brunoCollectionPath"
+    bru run --output "$testReportFile" --format junit
   displayName: 'Run Bruno Tests and Generate JUnit Report'
   
 - task: PublishTestResults@2
