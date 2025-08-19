@@ -97,28 +97,12 @@ async function getTestResults(runId) {
     const text = await res.text();
     throw new Error(`Failed to fetch test results: ${res.status} ${text}`);
   }
-
   const data = await res.json();
-  console.log(data);
-const results = Array.isArray(data.value)
-  ? data.value.map(r => ({
+  console.log("Raw rdata:", JSON.stringify(data, null, 2));
+  return data.value.map(r => ({
       id: r.id,
       title: r.testCaseTitle
-    }))
-  : [];
-
-if (results.length === 0) {
-  console.warn("⚠️ No results found in this test run.");
-}
-
-
-  // Print nicely
-  console.log("=== Test Results for Run:", runId, "===");
-  results.forEach(r => {
-    console.log(`ID: ${r.id} | Title: ${r.title}`);
-  });
-
-  return results;
+    }));
 }
 
 // Update test results using point IDs
