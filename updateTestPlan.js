@@ -99,7 +99,7 @@ async function getTestResults(runId) {
   }
 
   const data = await res.json();
-
+  console.log(data);
 const results = Array.isArray(data.value)
   ? data.value.map(r => ({
       id: r.id,
