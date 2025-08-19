@@ -24,7 +24,7 @@ const authHeader = () => {
 };
 
 // Azure DevOps REST API base URL
-const baseUrl = `https://dev.azure.com/${ADO_ORG}/${ADO_PROJECT}/_apis/test`;
+const baseUrl = `https://dev.azure.com/${ADO_ORG}/${ADO_PROJECT}/_apis`;
 
 // Read and parse JUnit report
 async function parseJUnitReport(filePath) {
@@ -46,7 +46,7 @@ async function parseJUnitReport(filePath) {
 async function createTestRun() {
   const points = await getTestPoints();
   const pointIds = points.map(p => p.id);
-  const url = `${baseUrl}/runs?api-version=7.1`;
+  const url = `${baseUrl}/test/runs?api-version=7.1`;
   const body = {
     name: `Bruno Test Run - ${new Date().toISOString()}`,
     plan: { id: parseInt(ADO_TEST_PLAN_ID, 10) },
@@ -75,7 +75,7 @@ async function createTestRun() {
 
 // Fetch test points for the suite
 async function getTestPoints() {
-  const url = `${baseUrl}/plans/${ADO_TEST_PLAN_ID}/suites/${ADO_TEST_SUITE_ID}/TestPoint?api-version=7.1`;
+  const url = `${baseUrl}/testplan/Plans/${ADO_TEST_PLAN_ID}/suites/${ADO_TEST_SUITE_ID}/TestPoint?api-version=7.1`;
   const res = await fetch(url, { headers: { Authorization: authHeader() } });
   if (!res.ok) {
     const text = await res.text();
@@ -87,7 +87,7 @@ async function getTestPoints() {
 
 // Get results for a test run and extract ID + test name
 async function getTestResults(runId) {
-  const url = `${baseUrl}/runs/${runId}/results?api-version=7.1`;
+  const url = `${baseUrl}/test/runs/${runId}/results?api-version=7.1`;
 
   const res = await fetch(url, {
     headers: { Authorization: authHeader() },
@@ -136,7 +136,7 @@ for (const point of points) {
   });
 }
 
-  const patchUrl = `${baseUrl}/runs/${runId}/results?api-version=7.1`;
+  const patchUrl = `${baseUrl}/test/runs/${runId}/results?api-version=7.1`;
   const patchRes = await fetch(patchUrl, {
     method: 'PATCH',
     headers: {
@@ -157,7 +157,7 @@ for (const point of points) {
 
 // Complete the test run to update statistics
 async function completeTestRun(runId) {
-  const url = `${baseUrl}/runs/${runId}?api-version=7.1`;
+  const url = `${baseUrl}/test/runs/${runId}?api-version=7.1`;
   const res = await fetch(url, {
     method: 'PATCH',
     headers: {
