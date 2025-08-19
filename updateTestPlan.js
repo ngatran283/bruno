@@ -66,7 +66,6 @@ async function createTestRun() {
 }
 
 // Update test results
-// Add or update test results for a run
 async function addTestResults(runId, suites) {
   // 1️⃣ Fetch existing test results for the run
   const getUrl = `${baseUrl}/runs/${runId}/results?api-version=7.1-preview.6`;
@@ -118,15 +117,6 @@ async function addTestResults(runId, suites) {
 
   console.log(`Successfully updated ${payload.length} test results for run ${runId}.`);
   return patchRes.json();
-}
-
-  const updateRes = await fetch(`${baseUrl}/runs/${runId}/results?api-version=7.1-preview.6`, {
-    method: 'PATCH',
-    headers: { 'Authorization': authHeader(), 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-
-  if (!updateRes.ok) throw new Error(`Failed to update test results: ${updateRes.statusText}`);
 }
 
 // Attach Bruno JUnit XML
