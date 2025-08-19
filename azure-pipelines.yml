@@ -65,13 +65,15 @@ async function createTestRun() {
   return res.json();
 }
 
-// Update test results
+// Upload test results
 async function addTestResults(runId, suites) {
+  // Fetch existing results to get correct IDs
   const res = await fetch(`${baseUrl}/runs/${runId}/results?api-version=7.1-preview.6`, {
     headers: { 'Authorization': authHeader() },
   });
   const existing = await res.json();
 
+  // Map outcomes to result IDs
   const payload = existing.value.map((r, i) => {
     const suite = suites[i % suites.length];
     return {
@@ -92,33 +94,24 @@ async function addTestResults(runId, suites) {
   if (!updateRes.ok) throw new Error(`Failed to update test results: ${updateRes.statusText}`);
 }
 
-// Attach Bruno JUnit XML
-async function attachBrunoJUnit(runId, filePath) {
+// Attach JUnit XML to the run
+async function attachJUnit(runId, filePath) {
   const fileData = fs.readFileSync(filePath);
   const url = `${baseUrl}/runs/${runId}/attachments?api-version=7.1-preview.3`;
-  
   const body = JSON.stringify({
     stream: fileData.toString('base64'),
     fileName: path.basename(filePath),
-    attachmentType: 'JUNIT',
-    comment: 'Bruno JUnit XML Report',
+    attachmentType: 'GeneralAttachment',
+    comment: 'JUnit XML Report',
   });
 
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 
-      'Authorization': authHeader(), 
-      'Content-Type': 'application/json' 
-    },
+    headers: { 'Authorization': authHeader(), 'Content-Type': 'application/json' },
     body,
   });
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Failed to attach Bruno JUnit XML: ${res.status} ${text}`);
-  }
-
-  console.log('Bruno JUnit XML attached successfully!');
+  if (!res.ok) throw new Error(`Failed to attach JUnit XML: ${res.statusText}`);
 }
 
 // Complete the run
@@ -148,8 +141,8 @@ async function completeRun(runId) {
     console.log('Updating test results...');
     await addTestResults(run.id, suites);
 
-    console.log('Attaching Bruno JUnit XML...');
-    await attachBrunoJUnit(run.id, TEST_REPORT_FILE);
+    console.log('Attaching JUnit XML...');
+    await attachJUnit(run.id, TEST_REPORT_FILE);
 
     console.log('Completing test run...');
     await completeRun(run.id);
