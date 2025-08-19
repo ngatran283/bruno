@@ -98,6 +98,8 @@ async function updateTestResults(runId, suites) {
     outcome:
       suites[i % suites.length].failures > 0 ? 'Failed' :
       suites[i % suites.length].skipped > 0 ? 'NotExecuted' : 'Passed',
+    automatedTestName: suites[i % suites.length].name,
+    automatedTestType:'Unit',
     comment: `Updated via pipeline for suite ${suites[i % suites.length].name}`,
   }));
 
