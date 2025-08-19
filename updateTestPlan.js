@@ -51,6 +51,7 @@ async function createTestRun() {
     // Optional: include suite
     ...(ADO_TEST_SUITE_ID ? { suite: { id: parseInt(ADO_TEST_SUITE_ID, 10) } } : {}),
     automated: true,
+    pointIds:[1,2]
   };
 
   const res = await fetch(url, {
