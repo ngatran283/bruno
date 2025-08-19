@@ -154,10 +154,10 @@ async function completeTestRun(runId) {
     const run = await createTestRun();
     console.log(`Test run created: ID ${run.id}`);
 
-    console.log('Updating test results...');
+    console.log(`Update result run created: ID ${run.id}`);
     await updateTestResults(run.id, suites);
 
-    console.log('Completing test run...');
+    console.log(`Complete: ID ${run.id}`);
     await completeTestRun(run.id);
 
        console.log('Test results uploaded and run completed successfully!');
