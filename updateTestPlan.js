@@ -160,4 +160,9 @@ async function completeTestRun(runId) {
     console.log('Completing test run...');
     await completeTestRun(run.id);
 
-    console.log('Test results uploaded and run complet
+       console.log('Test results uploaded and run completed successfully!');
+  } catch (err) {
+    console.error('Error updating Azure DevOps Test Plan:', err);
+    process.exit(1);
+  }
+})();
