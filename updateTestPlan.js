@@ -87,7 +87,7 @@ async function getTestPoints() {
 
 // Get results for a test run and extract ID + test name
 async function getTestResults(runId) {
-  const url = `${baseUrl}/test/runs/${runId}/results?api-version=7.1`;
+  const url = `${baseUrl}/runs/${runId}/results?api-version=7.1-preview.6`;
 
   const res = await fetch(url, {
     headers: { Authorization: authHeader() },
@@ -101,20 +101,26 @@ async function getTestResults(runId) {
   const data = await res.json();
 
   // Extract value.id and testCaseTitle
-  return data.value.map(r => ({
+  const results = data.value.map(r => ({
     id: r.id,
-    title: r.testCaseTitle  }));
-}
+    title: r.testCaseTitle
+  }));
 
+  // Print nicely
+  console.log("=== Test Results for Run:", runId, "===");
+  results.forEach(r => {
+    console.log(`ID: ${r.id} | Title: ${r.title}`);
+  });
+
+  return results;
+}
 
 // Update test results using point IDs
 async function addTestResults(runId, suites) {
   const points = getTestResults(runId);
-  if (!points.length) throw new Error('No test points found for the suite.');
 
   // Map suites to points
 const payload = [];
-
 for (const point of points) {
   // Find matching suite by name (case-insensitive)
   const suite = suites.find(s => 
