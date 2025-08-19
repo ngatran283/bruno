@@ -107,11 +107,11 @@ async function getTestResults(runId) {
 
 // Update test results using point IDs
 async function addTestResults(runId, suites) {
-  const points = getTestResults(runId);
+  const suitePoints = getTestResults(runId);
 
   // Map suites to points
 const payload = [];
-for (const point of points) {
+for (const point of suitePoints) {
   // Find matching suite by name (case-insensitive)
   const suite = suites.find(s => 
     s.name.toLowerCase() === (point.title || '').toLowerCase()
