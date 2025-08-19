@@ -33,6 +33,7 @@ async function parseJUnitReport(filePath) {
   const testsuites = result.testsuites.testsuite || [];
 
  return  testsuites.map((suite) => ({
+    id: 1,
     name: suite.$.name,
     errors: parseInt(suite.$.errors, 10),
     failures: parseInt(suite.$.failures, 10),
