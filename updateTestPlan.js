@@ -87,7 +87,7 @@ async function getTestPoints() {
 
 // Get results for a test run and extract ID + test name
 async function getTestResults(runId) {
-  const url = `${baseUrl}/runs/${runId}/results?api-version=7.1-preview.6`;
+  const url = `${baseUrl}/test/runs/${runId}/results?api-version=7.1-preview.6`;
 
   const res = await fetch(url, {
     headers: { Authorization: authHeader() },
@@ -111,7 +111,7 @@ console.log("Parsed Results:", results);
 
 // Update test results using point IDs
 async function addTestResults(runId, suites) {
-  const suitePoints = getTestResults(runId);
+  const suitePoints = await getTestResults(runId);
 
   // Map suites to points
 const payload = [];
@@ -126,16 +126,18 @@ for (const point of suitePoints) {
     continue;
   }
   payload.push({
-    pointId: point.id, // ✅ use pointId, not id
+    id: point.id, // ✅ use pointId, not id
     outcome:
       suite.failures > 0 ? 'Failed' :
       suite.skipped > 0 ? 'NotExecuted' : 'Passed',
     automatedTestName: suite.name,
     automatedTestType: 'Unit',
     testCaseTitle: suite.name,
+    state:'Completed'
+
   });
 }
-
+  console.log(payload)
   const patchUrl = `${baseUrl}/test/runs/${runId}/results?api-version=7.1`;
   const patchRes = await fetch(patchUrl, {
     method: 'PATCH',
