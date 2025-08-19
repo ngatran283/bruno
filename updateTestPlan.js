@@ -100,11 +100,17 @@ async function getTestResults(runId) {
 
   const data = await res.json();
 
-  // Extract value.id and testCaseTitle
-  const results = data.value.map(r => ({
-    id: r.id,
-    title: r.testCaseTitle
-  }));
+const results = Array.isArray(data.value)
+  ? data.value.map(r => ({
+      id: r.id,
+      title: r.testCaseTitle
+    }))
+  : [];
+
+if (results.length === 0) {
+  console.warn("⚠️ No results found in this test run.");
+}
+
 
   // Print nicely
   console.log("=== Test Results for Run:", runId, "===");
