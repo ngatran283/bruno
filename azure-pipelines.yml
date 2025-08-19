@@ -17,7 +17,7 @@ variables:
   ADO_PROJECT: 'demo'          # your Azure DevOps project
   ADO_PAT: $(PersonalAccessToken)    # secret PAT stored in pipeline
   ADO_TEST_PLAN_ID: '3'          # your Test Plan ID
-  ADO_TEST_SUITE_ID: '4'         # optional, target specific suite
+  ADO_TEST_SUITE_ID: '5'         # optional, target specific suite
 
   # Bruno configuration
   brunoCollectionPath: 'test1'
