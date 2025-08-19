@@ -97,12 +97,16 @@ async function getTestResults(runId) {
     const text = await res.text();
     throw new Error(`Failed to fetch test results: ${res.status} ${text}`);
   }
-  const data = await res.json();
-  console.log("Raw rdata:", JSON.stringify(data, null, 2));
-  return data.value.map(r => ({
+    const data = await res.json();
+  const results = Array.isArray(data.value)
+  ? data.value.map(r => ({
       id: r.id,
       title: r.testCaseTitle
-    }));
+    }))
+  : [];
+
+console.log("Parsed Results:", results);
+  return results;
 }
 
 // Update test results using point IDs
