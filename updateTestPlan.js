@@ -3,8 +3,11 @@
 import fs from 'fs';
 import path from 'path';
 import { parseStringPromise } from 'xml2js';
+import fetch from 'node-fetch';
 
-// Environment variables from pipeline
+// -----------------------------
+// Environment variables
+// -----------------------------
 const ADO_ORG = process.env.ADO_ORG;
 const ADO_PROJECT = process.env.ADO_PROJECT;
 const ADO_PAT = process.env.ADO_PAT;
@@ -17,23 +20,28 @@ if (!ADO_ORG || !ADO_PROJECT || !ADO_PAT || !ADO_TEST_PLAN_ID || !TEST_REPORT_FI
   process.exit(1);
 }
 
-// Basic auth header for Azure DevOps REST API
+// -----------------------------
+// Auth header
+// -----------------------------
 const authHeader = () => {
   const token = Buffer.from(`:${ADO_PAT}`).toString('base64');
   return `Basic ${token}`;
 };
 
-// Azure DevOps REST API base URL
+// -----------------------------
+// Base API URL
+// -----------------------------
 const baseUrl = `https://dev.azure.com/${ADO_ORG}/${ADO_PROJECT}/_apis/test`;
 
-// Read and parse JUnit report
+// -----------------------------
+// Parse JUnit XML report
+// -----------------------------
 async function parseJUnitReport(filePath) {
   const xml = fs.readFileSync(path.resolve(filePath), 'utf-8');
   const result = await parseStringPromise(xml);
   const testsuites = result.testsuites.testsuite || [];
 
- return  testsuites.map((suite) => ({
-    id: 1,
+  return testsuites.map((suite) => ({
     name: suite.$.name,
     errors: parseInt(suite.$.errors, 10),
     failures: parseInt(suite.$.failures, 10),
@@ -43,16 +51,17 @@ async function parseJUnitReport(filePath) {
   }));
 }
 
-// Create a new test run
+// -----------------------------
+// Create Test Run with fixed pointIds [1,2]
+// -----------------------------
 async function createTestRun() {
-  const url = `${baseUrl}/runs?api-version=7.1-preview.2`;
+  const url = `${baseUrl}/runs?api-version=7.1-preview.3`;
   const body = {
-    name: `Bruno Test Run - ${new Date().toISOString()}`,
+    name: `Automated Test Run - ${new Date().toISOString()}`,
     plan: { id: parseInt(ADO_TEST_PLAN_ID, 10) },
-    // Optional: include suite
     ...(ADO_TEST_SUITE_ID ? { suite: { id: parseInt(ADO_TEST_SUITE_ID, 10) } } : {}),
     automated: true,
-    pointIds:[1,2]
+    pointIds: [1, 2], // Fixed point IDs
   };
 
   const res = await fetch(url, {
@@ -72,21 +81,28 @@ async function createTestRun() {
   return res.json();
 }
 
-// Add test results to the test run
-async function addTestResults(runId, results) {
-  const url = `${baseUrl}/runs/${runId}/results?api-version=7.1-preview.6`;
+// -----------------------------
+// Update test results for run
+// -----------------------------
+async function updateTestResults(runId, suites) {
+  // Fetch result IDs from run
+  const resultsRes = await fetch(`${baseUrl}/runs/${runId}/results?api-version=7.1-preview.6`, {
+    headers: { 'Authorization': authHeader() }
+  });
+  const resultsData = await resultsRes.json();
+  const results = resultsData.value;
 
-  const payload = results.map((suite) => ({
-    testCaseTitle: suite.name,
+  // Map suites to results
+  const payload = results.map((r, i) => ({
+    id: r.id,
     outcome:
-      suite.failures > 0 ? 'Failed' :
-      suite.skipped > 0 ? 'NotExecuted' : 'Passed',
-    automatedTestName: suite.name,
-    automatedTestType: 'Unit',
+      suites[i % suites.length].failures > 0 ? 'Failed' :
+      suites[i % suites.length].skipped > 0 ? 'NotExecuted' : 'Passed',
+    comment: `Updated via pipeline for suite ${suites[i % suites.length].name}`,
   }));
 
-  const res = await fetch(url, {
-    method: 'POST',
+  const res = await fetch(`${baseUrl}/runs/${runId}/results?api-version=7.1-preview.6`, {
+    method: 'PATCH',
     headers: {
       'Authorization': authHeader(),
       'Content-Type': 'application/json',
@@ -96,33 +112,52 @@ async function addTestResults(runId, results) {
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Failed to add test results: ${res.status} ${text}`);
+    throw new Error(`Failed to update test results: ${res.status} ${text}`);
   }
 
   return res.json();
 }
 
-// Main execution
+// -----------------------------
+// Complete Test Run
+// -----------------------------
+async function completeTestRun(runId) {
+  const url = `${baseUrl}/runs/${runId}?api-version=7.1-preview.3`;
+  const body = { state: 'Completed', comment: 'Run finished via pipeline' };
+
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': authHeader(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to complete test run: ${res.status} ${text}`);
+  }
+
+  return res.json();
+}
+
+// -----------------------------
+// Main Execution
+// -----------------------------
 (async () => {
   try {
     console.log('Parsing JUnit report...');
-    const results = await parseJUnitReport(TEST_REPORT_FILE);
-results.map((suite) => {
-  // Detailed logging
-  console.log('-----------------------------------------');
-  console.log(`Test Suite Name : ${suite.name}`);
-  console.log(`Tests           : ${suite.tests}`);
-  console.log('-----------------------------------------')});
-    console.log('Creating test run...');
+    const suites = await parseJUnitReport(TEST_REPORT_FILE);
+
+    console.log('Creating test run with pointIds [1,2]...');
     const run = await createTestRun();
     console.log(`Test run created: ID ${run.id}`);
 
-    console.log('Uploading test results...');
-    await addTestResults(run.id, results);
+    console.log('Updating test results...');
+    await updateTestResults(run.id, suites);
 
-    console.log('Test results uploaded successfully!');
-  } catch (err) {
-    console.error('Error updating Azure DevOps Test Plan:', err);
-    process.exit(1);
-  }
-})();
+    console.log('Completing test run...');
+    await completeTestRun(run.id);
+
+    console.log('Test results uploaded and run complet
