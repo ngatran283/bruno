@@ -1,59 +1,162 @@
-# Starter pipeline
-# Start with a minimal pipeline that you can customize to build and deploy your code.
-# Add steps that build, run tests, deploy, and more:
-# https://aka.ms/yaml
+#!/usr/bin/env node
 
-# Starter pipeline with Bruno + Azure DevOps Test Plan update
+import fs from 'fs';
+import path from 'path';
+import { parseStringPromise } from 'xml2js';
+import fetch from 'node-fetch';
 
-trigger:
-- main
+// Environment variables
+const ADO_ORG = process.env.ADO_ORG;
+const ADO_PROJECT = process.env.ADO_PROJECT;
+const ADO_PAT = process.env.ADO_PAT;
+const ADO_TEST_PLAN_ID = process.env.ADO_TEST_PLAN_ID;
+const ADO_TEST_SUITE_ID = process.env.ADO_TEST_SUITE_ID; // optional
+const TEST_REPORT_FILE = process.env.TEST_REPORT_FILE;
+const BUILD_ID = process.env.BUILD_BUILDID || '0';
 
-pool:
-  name: 'Default'
+if (!ADO_ORG || !ADO_PROJECT || !ADO_PAT || !ADO_TEST_PLAN_ID || !TEST_REPORT_FILE) {
+  console.error('Missing required environment variables.');
+  process.exit(1);
+}
 
-variables:
-  # Azure DevOps configuration
-  ADO_ORG: 'ngatran283'                  # your Azure DevOps org
-  ADO_PROJECT: 'demo'          # your Azure DevOps project
-  ADO_PAT: $(PersonalAccessToken)    # secret PAT stored in pipeline
-  ADO_TEST_PLAN_ID: '3'          # your Test Plan ID
-  ADO_TEST_SUITE_ID: '5'         # optional, target specific suite
+// Basic auth
+const authHeader = () => {
+  const token = Buffer.from(`:${ADO_PAT}`).toString('base64');
+  return `Basic ${token}`;
+};
 
-  # Bruno configuration
-  brunoCollectionPath: 'test1'
-  brunoEnvironment: 'local'
-  testReportFile: 'junit-report.xml'
+const baseUrl = `https://dev.azure.com/${ADO_ORG}/${ADO_PROJECT}/_apis/test`;
 
-steps:
-# 1️⃣ Install Node.js
-- task: NodeTool@0
-  inputs:
-    versionSpec: '20.x'
-  displayName: 'Install Node.js'
+// Parse JUnit report
+async function parseJUnitReport(filePath) {
+  const xml = fs.readFileSync(path.resolve(filePath), 'utf-8');
+  const result = await parseStringPromise(xml);
+  const testsuites = result.testsuites.testsuite || [];
 
-# 2️⃣ Install Bruno CLI
-- script: |
-    sudo npm install -g @usebruno/cli
-  displayName: 'Install Bruno CLI'
+  return testsuites.map((suite, index) => ({
+    id: index + 1,
+    name: suite.$.name,
+    errors: parseInt(suite.$.errors, 10),
+    failures: parseInt(suite.$.failures, 10),
+    skipped: parseInt(suite.$.skipped, 10),
+    tests: parseInt(suite.$.tests, 10),
+    time: parseFloat(suite.$.time),
+  }));
+}
 
-# 3️⃣ Install Node dependencies for test plan update script
-- script: |
-    sudo npm install xml2js node-fetch
-  displayName: 'Install Node.js Dependencies'
+// Create test run
+async function createTestRun() {
+  const url = `${baseUrl}/runs?api-version=7.1-preview.2`;
+  const body = {
+    name: `Automated Test Run - ${new Date().toISOString()}`,
+    plan: { id: parseInt(ADO_TEST_PLAN_ID, 10) },
+    ...(ADO_TEST_SUITE_ID ? { suite: { id: parseInt(ADO_TEST_SUITE_ID, 10) } } : {}),
+    automated: true,
+    build: { id: parseInt(BUILD_ID, 10) },
+  };
 
-# 4️⃣ Run Bruno Tests and generate JUnit report
-- script: |
-    bru run "$(brunoCollectionPath)" --output "$(Build.ArtifactStagingDirectory)/$(testReportFile)" --format junit --env $(brunoEnvironment)
-  displayName: 'Run Bruno Tests and Generate JUnit Report'
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Authorization': authHeader(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
 
-# 5️⃣ Update Azure DevOps Test Plan with Bruno results
-- script: |
-    node updateTestPlan.js
-  displayName: 'Update Azure DevOps Test Plan with Bruno Results'
-  env:
-    ADO_ORG: $(ADO_ORG)
-    ADO_PROJECT: $(ADO_PROJECT)
-    ADO_PAT: $(ADO_PAT)
-    ADO_TEST_PLAN_ID: $(ADO_TEST_PLAN_ID)
-    ADO_TEST_SUITE_ID: $(ADO_TEST_SUITE_ID)
-    TEST_REPORT_FILE: $(Build.ArtifactStagingDirectory)/$(testReportFile)
+  if (!res.ok) throw new Error(`Failed to create test run: ${res.statusText}`);
+  return res.json();
+}
+
+// Update test results
+async function addTestResults(runId, suites) {
+  const res = await fetch(`${baseUrl}/runs/${runId}/results?api-version=7.1-preview.6`, {
+    headers: { 'Authorization': authHeader() },
+  });
+  const existing = await res.json();
+
+  const payload = existing.value.map((r, i) => {
+    const suite = suites[i % suites.length];
+    return {
+      id: r.id,
+      outcome: suite.failures > 0 ? 'Failed' : suite.skipped > 0 ? 'NotExecuted' : 'Passed',
+      automatedTestName: suite.name,
+      automatedTestType: 'Unit',
+      testCaseTitle: suite.name,
+    };
+  });
+
+  const updateRes = await fetch(`${baseUrl}/runs/${runId}/results?api-version=7.1-preview.6`, {
+    method: 'PATCH',
+    headers: { 'Authorization': authHeader(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!updateRes.ok) throw new Error(`Failed to update test results: ${updateRes.statusText}`);
+}
+
+// Attach Bruno JUnit XML
+async function attachBrunoJUnit(runId, filePath) {
+  const fileData = fs.readFileSync(filePath);
+  const url = `${baseUrl}/runs/${runId}/attachments?api-version=7.1-preview.3`;
+  
+  const body = JSON.stringify({
+    stream: fileData.toString('base64'),
+    fileName: path.basename(filePath),
+    attachmentType: 'JUNIT',
+    comment: 'Bruno JUnit XML Report',
+  });
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 
+      'Authorization': authHeader(), 
+      'Content-Type': 'application/json' 
+    },
+    body,
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to attach Bruno JUnit XML: ${res.status} ${text}`);
+  }
+
+  console.log('Bruno JUnit XML attached successfully!');
+}
+
+// Complete the run
+async function completeRun(runId) {
+  const url = `${baseUrl}/runs/${runId}?api-version=7.1-preview.3`;
+  const body = { state: 'Completed' };
+
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Authorization': authHeader(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) throw new Error(`Failed to complete run: ${res.statusText}`);
+}
+
+// Main
+(async () => {
+  try {
+    console.log('Parsing JUnit report...');
+    const suites = await parseJUnitReport(TEST_REPORT_FILE);
+
+    console.log('Creating test run...');
+    const run = await createTestRun();
+    console.log(`Test run created: ID ${run.id}`);
+
+    console.log('Updating test results...');
+    await addTestResults(run.id, suites);
+
+    console.log('Attaching Bruno JUnit XML...');
+    await attachBrunoJUnit(run.id, TEST_REPORT_FILE);
+
+    console.log('Completing test run...');
+    await completeRun(run.id);
+
+    console.log('Test run updated successfully!');
+  } catch (err) {
+    console.error('Error:', err);
+    process.exit(1);
+  }
+})();
