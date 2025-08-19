@@ -44,13 +44,16 @@ async function parseJUnitReport(filePath) {
 
 // Create a new test run
 async function createTestRun() {
+  const points = await getTestPoints();
+  const pointIds = points.map(p => p.id);
   const url = `${baseUrl}/runs?api-version=7.1-preview.2`;
   const body = {
     name: `Bruno Test Run - ${new Date().toISOString()}`,
     plan: { id: parseInt(ADO_TEST_PLAN_ID, 10) },
     // Optional: include suite
     ...(ADO_TEST_SUITE_ID ? { suite: { id: parseInt(ADO_TEST_SUITE_ID, 10) } } : {}),
-    automated: true
+    automated: true,
+    pointIds: pointIds
   };
 
   const res = await fetch(url, {
@@ -70,21 +73,72 @@ async function createTestRun() {
   return res.json();
 }
 
-// Add test results to the test run
-async function addTestResults(runId, results) {
+// Fetch test points for the suite
+async function getTestPoints() {
+  const url = `${baseUrl}/plans/${ADO_TEST_PLAN_ID}/suites/${ADO_TEST_SUITE_ID}/TestPoint?api-version=7.1-preview.2`;
+  const res = await fetch(url, { headers: { Authorization: authHeader() } });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to fetch test points: ${res.status} ${text}`);
+  }
+  const data = await res.json();
+  return data.value; // array of test points
+}
+
+// Get results for a test run and extract ID + test name
+async function getTestResults(runId) {
   const url = `${baseUrl}/runs/${runId}/results?api-version=7.1-preview.6`;
 
-  const payload = results.map((suite) => ({
-    testCaseTitle: suite.name,
+  const res = await fetch(url, {
+    headers: { Authorization: authHeader() },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to fetch test results: ${res.status} ${text}`);
+  }
+
+  const data = await res.json();
+
+  // Extract value.id and testCaseTitle
+  return data.value.map(r => ({
+    id: r.id,
+    title: r.testCaseTitle  }));
+}
+
+
+// Update test results using point IDs
+async function addTestResults(runId, suites) {
+  const points = getTestResults(runId);
+  if (!points.length) throw new Error('No test points found for the suite.');
+
+  // Map suites to points
+const payload = [];
+
+for (const point of points) {
+  // Find matching suite by name (case-insensitive)
+  const suite = suites.find(s => 
+    s.name.toLowerCase() === (point.title || '').toLowerCase()
+  );
+
+  if (!suite) {
+    console.warn(`⚠️ No matching suite found for test point "${point.title}" (ID ${point.id})`);
+    continue;
+  }
+  payload.push({
+    pointId: point.id, // ✅ use pointId, not id
     outcome:
       suite.failures > 0 ? 'Failed' :
       suite.skipped > 0 ? 'NotExecuted' : 'Passed',
     automatedTestName: suite.name,
     automatedTestType: 'Unit',
-  }));
+    testCaseTitle: suite.name,
+  });
+}
 
-  const res = await fetch(url, {
-    method: 'POST',
+  const patchUrl = `${baseUrl}/runs/${runId}/results?api-version=7.1-preview.6`;
+  const patchRes = await fetch(patchUrl, {
+    method: 'PATCH',
     headers: {
       'Authorization': authHeader(),
       'Content-Type': 'application/json',
@@ -92,11 +146,33 @@ async function addTestResults(runId, results) {
     body: JSON.stringify(payload),
   });
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Failed to add test results: ${res.status} ${text}`);
+  if (!patchRes.ok) {
+    const text = await patchRes.text();
+    throw new Error(`Failed to update test results: ${patchRes.status} ${text}`);
   }
 
+  console.log(`Updated ${payload.length} test results for run ${runId}.`);
+  return patchRes.json();
+}
+
+// Complete the test run to update statistics
+async function completeTestRun(runId) {
+  const url = `${baseUrl}/runs/${runId}?api-version=7.1-preview.2`;
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: authHeader(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ state: 'Completed' }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to complete test run: ${res.status} ${text}`);
+  }
+
+  console.log(`Test run ${runId} marked as Completed.`);
   return res.json();
 }
 
@@ -117,6 +193,8 @@ results.map((suite) => {
 
     console.log('Uploading test results...');
     await addTestResults(run.id, results);
+
+    await completeTestRun(run.id);
 
     console.log('Test results uploaded successfully!');
   } catch (err) {
