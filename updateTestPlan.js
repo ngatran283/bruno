@@ -27,26 +27,31 @@ const authHeader = () => {
 // Azure DevOps REST API base URL
 const baseUrl = `https://dev.azure.com/${ADO_ORG}/${ADO_PROJECT}/_apis`;
 
-// Read and parse JUnit report
-async function parseJUnitReport(filePath) {
+async function parseJUnitTestCases(filePath) {
   const xml = fs.readFileSync(path.resolve(filePath), 'utf-8');
   const result = await parseStringPromise(xml);
-  const testsuites = result.testsuites.testsuite || [];
+  const testCases = [];
 
- return  testsuites.map((suite) => ({
-    name: suite.$.name,
-    errors: parseInt(suite.$.errors, 10),
-    failures: parseInt(suite.$.failures, 10),
-    skipped: parseInt(suite.$.skipped, 10),
-    tests: parseInt(suite.$.tests, 10),
-    time: parseFloat(suite.$.time),
-  }));
+  const testsuites = result.testsuites.testsuite || [];
+  for (const suite of testsuites) {
+    const cases = suite.testcase || [];
+    for (const test of cases) {
+      testCases.push({
+        suiteName: suite.$.name,
+        testName: test.$.name,
+        classname: test.$.classname,
+        time: parseFloat(test.$.time),
+        status: test.$.status,
+        failureMessage: test.failure ? test.failure[0].$.message : null,
+      });
+    }
+  }
+  return testCases;
 }
 
+
 // Create a new test run
-async function createTestRun() {
-  const points = await getTestPoints();
-  const pointIds = points.map(p => p.id);
+async function createTestRun(pointIds) {
   const url = `${baseUrl}/test/runs?api-version=7.1`;
   const body = {
     name: `Bruno Test Run - ${new Date().toISOString()}`,
@@ -136,52 +141,40 @@ console.log("Parsed Results:", results);
   return results;
 }
 
-// Update test results using point IDs
-async function addTestResults(runId, suites) {
-  const suitePoints = await getTestResults(runId);
+async function addTestResults(runId, testCases, testPoints) {
+  const url = `${baseUrl}/test/Runs/${runId}/results?api-version=7.1`;
 
-  // Map suites to points
-const payload = [];
-for (const point of suitePoints) {
-  // Find matching suite by name (case-insensitive)
-  const suite = suites.find(s => 
-    s.name.toLowerCase() === (point.title || '').toLowerCase()
-  );
-
-  if (!suite) {
-    console.warn(`⚠️ No matching suite found for test point "${point.title}" (ID ${point.id})`);
-    continue;
+  const payload = [];
+  for (const point of testPoints) {
+    const match = testCases.find(tc => tc.testName === point.testCase.name);
+    if (match) {
+      payload.push({
+        id: point.id,
+        outcome: match.status === 'fail' ? 'Failed' : match.status === 'pass' ? 'Passed' : 'NotExecuted',
+        automatedTestName: match.testName,
+        automatedTestType: 'Unit',
+        testCaseTitle: match.testName,
+        errorMessage: match.failureMessage,
+        state:'Completed'
+      });
+    }
   }
-  payload.push({
-    id: point.id, // ✅ use pointId, not id
-    outcome:
-      suite.failures > 0 ? 'Failed' :
-      suite.skipped > 0 ? 'NotExecuted' : 'Passed',
-    automatedTestName: suite.name,
-    automatedTestType: 'Unit',
-    testCaseTitle: suite.name,
-    state:'Completed'
 
-  });
-}
-  console.log(payload)
-  const patchUrl = `${baseUrl}/test/runs/${runId}/results?api-version=7.1`;
-  const patchRes = await fetch(patchUrl, {
-    method: 'PATCH',
-    headers: {
-      'Authorization': authHeader(),
-      'Content-Type': 'application/json',
-    },
+  if (payload.length === 0) {
+    console.warn('No matching test cases found for test points.');
+    return;
+  }
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: authHeader(), 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
 
-  if (!patchRes.ok) {
-    const text = await patchRes.text();
-    throw new Error(`Failed to update test results: ${patchRes.status} ${text}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Failed to add test results: ${res.status} ${text}`);
   }
-
-  console.log(`Updated ${payload.length} test results for run ${runId}.`);
-  return patchRes.json();
+  return res.json();
 }
 
 // Complete the test run to update statistics
@@ -205,6 +198,35 @@ async function completeTestRun(runId) {
   return res.json();
 }
 
+(async () => {
+  try {
+    console.log('Parsing JUnit report...');
+    const testCases = await parseJUnitTestCases(TEST_REPORT_FILE);
+
+    console.log('Fetching test points...');
+    const testPoints = await getTestPoints();
+    const pointIds = testPoints.map(p => p.id);
+
+
+    console.log('Creating test run...');
+    const run = await createTestRun(pointIds);
+    console.log(`Test run created: ID ${run.id}`);
+
+    console.log('Updating test results...');
+    await addTestResults(run.id, testCases, testPoints);
+
+    console.log('Attaching JUnit report...');
+    await addRunAttachment(run.id, TEST_REPORT_FILE);
+    console.log('✅ JUnit report attached.');
+
+    await completeTestRun(run.id);
+    console.log('Test run updated successfully!');
+  } catch (err) {
+    console.error('Error updating Azure DevOps Test Plan:', err);
+    process.exit(1);
+  }
+})();
+
 // Main execution
 (async () => {
   try {
@@ -220,16 +242,11 @@ results.map((suite) => {
     const run = await createTestRun();
     console.log(`Test run created: ID ${run.id}`);
 
-    console.log('Attaching JUnit report...');
-    await addRunAttachment(run.id, TEST_REPORT_FILE);
-    console.log('✅ JUnit report attached.');
+  
 
     console.log('Uploading test results...');
     await addTestResults(run.id, results);
 
-    await completeTestRun(run.id);
-
-    console.log('Test results uploaded successfully!');
   } catch (err) {
     console.error('Error updating Azure DevOps Test Plan:', err);
     process.exit(1);
