@@ -226,29 +226,3 @@ async function completeTestRun(runId) {
     process.exit(1);
   }
 })();
-
-// Main execution
-(async () => {
-  try {
-    console.log('Parsing JUnit report...');
-    const results = await parseJUnitReport(TEST_REPORT_FILE);
-results.map((suite) => {
-  // Detailed logging
-  console.log('-----------------------------------------');
-  console.log(`Test Suite Name : ${suite.name}`);
-  console.log(`Tests           : ${suite.tests}`);
-  console.log('-----------------------------------------')});
-    console.log('Creating test run...');
-    const run = await createTestRun();
-    console.log(`Test run created: ID ${run.id}`);
-
-  
-
-    console.log('Uploading test results...');
-    await addTestResults(run.id, results);
-
-  } catch (err) {
-    console.error('Error updating Azure DevOps Test Plan:', err);
-    process.exit(1);
-  }
-})();
