@@ -11,6 +11,7 @@ const ADO_PAT = process.env.ADO_PAT;
 const ADO_TEST_PLAN_ID = process.env.ADO_TEST_PLAN_ID;
 const ADO_TEST_SUITE_ID = process.env.ADO_TEST_SUITE_ID; // optional
 const TEST_REPORT_FILE = process.env.TEST_REPORT_FILE;
+const BUILD_BUILDID = process.env.BUILD_BUILDID;
 
 if (!ADO_ORG || !ADO_PROJECT || !ADO_PAT || !ADO_TEST_PLAN_ID || !TEST_REPORT_FILE) {
   console.error('Missing required environment variables.');
