@@ -53,7 +53,8 @@ async function createTestRun() {
     // Optional: include suite
     ...(ADO_TEST_SUITE_ID ? { suite: { id: parseInt(ADO_TEST_SUITE_ID, 10) } } : {}),
     automated: true,
-    pointIds: pointIds
+    pointIds: pointIds,
+    build: { id: BUILD_BUILDID }
   };
 
   const res = await fetch(url, {
@@ -70,6 +71,31 @@ async function createTestRun() {
     throw new Error(`Failed to create test run: ${res.status} ${text}`);
   }
 
+  return res.json();
+}
+
+// Upload Attachment (JUnit XML)
+async function addRunAttachment(runId, filePath) {
+  const url = `${baseUrl}/runs/${runId}/attachments?api-version=7.1`;
+  const content = fs.readFileSync(filePath);
+
+  const formData = {
+    stream: content.toString('base64'), // must be base64
+    fileName: path.basename(filePath),
+    comment: 'JUnit XML Test Report',
+    attachmentType: 'GeneralAttachment',
+  };
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': authHeader(),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(formData),
+  });
+
+  if (!res.ok) throw new Error(`Failed to attach file: ${res.status} ${await res.text()}`);
   return res.json();
 }
 
@@ -192,6 +218,10 @@ results.map((suite) => {
     console.log('Creating test run...');
     const run = await createTestRun();
     console.log(`Test run created: ID ${run.id}`);
+
+    console.log('Attaching JUnit report...');
+    await addRunAttachment(run.id, TEST_REPORT_FILE);
+    console.log('✅ JUnit report attached.');
 
     console.log('Uploading test results...');
     await addTestResults(run.id, results);
