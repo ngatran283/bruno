@@ -77,7 +77,7 @@ async function createTestRun() {
 
 // Upload Attachment (JUnit XML)
 async function addRunAttachment(runId, filePath) {
-  const url = `${baseUrl}/runs/${runId}/attachments?api-version=7.1`;
+  const url = `${baseUrl}/test/runs/${runId}/attachments?api-version=7.1`;
   const content = fs.readFileSync(filePath);
 
   const formData = {
