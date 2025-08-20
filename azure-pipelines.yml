@@ -46,13 +46,17 @@ steps:
     bru run "$(brunoCollectionPath)" --output "$(Build.ArtifactStagingDirectory)/$(testReportFile)" --format junit --env $(brunoEnvironment)
   displayName: 'Run Bruno Tests and Generate JUnit Report'
 
-- task: PublishTestResults@1
-  inputs:
-    testResultsFormat: 'JUnit'
-    testResultsFiles: '$(Build.ArtifactStagingDirectory)/junit-report.xml'
-    testRunTitle: 'My Automated JUnit Run'
-    testPlan: '3'              # ID of your Test Plan
-    testSuites: '5'            # One or more Suite IDs (comma separated)
-    testCaseMatchingStrategy: 'TestName' # or TestProperty, Regex
+# 5️⃣ Update Azure DevOps Test Plan with Bruno results
+- script: |
+    node updateTestPlan.js
+  displayName: 'Update Azure DevOps Test Plan with Bruno Results'
+  env:
+    ADO_ORG: $(ADO_ORG)
+    ADO_PROJECT: $(ADO_PROJECT)
+    ADO_PAT: $(ADO_PAT)
+    ADO_TEST_PLAN_ID: $(ADO_TEST_PLAN_ID)
+    ADO_TEST_SUITE_ID: $(ADO_TEST_SUITE_ID)
+    TEST_REPORT_FILE: $(Build.ArtifactStagingDirectory)/$(testReportFile)
+    BUILD_BUILDID: $(Build.BuildId)
   condition:
     succeededOrFailed()
