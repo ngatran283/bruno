@@ -58,3 +58,5 @@ steps:
     ADO_TEST_SUITE_ID: $(ADO_TEST_SUITE_ID)
     TEST_REPORT_FILE: $(Build.ArtifactStagingDirectory)/$(testReportFile)
     BUILD_BUILDID: $(Build.BuildId)
+  condition:
+    succeededOrFailed()
