@@ -9,12 +9,19 @@ get {
   body: none
   auth: inherit
 }
+assert {
+  res.body.info_1: isNumber
+}
+
 tests {
    test("get detail config info", function() {
       expect(res.status).to.equal(200);
     });
+  
+   test("compare config id", function() {
+      expect(res.body.id_config).to.not.equal("1235435436545");
+    });
 }
-
 
 settings {
   encodeUrl: true
